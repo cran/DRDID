@@ -40,13 +40,13 @@ NULL
 
 #' @references
 #' \cite{Heckman, James J., Ichimura, Hidehiko, and Todd, Petra E. (1997),"Matching as an Econometric Evaluation Estimator: Evidence from Evaluating a Job Training Programme",
-#' Review of Economic Studies, vol. 64(4), p. 605–654, \url{https://doi.org/10.2307/2971733}.
+#' Review of Economic Studies, vol. 64(4), p. 605–654, \doi{10.2307/2971733}.
 #' }
 #'
 #'
 #' \cite{Sant'Anna, Pedro H. C. and Zhao, Jun. (2020),
-#' "Doubly Robust Difference-in-Differences Estimators." Journal of Econometrics, Forthcoming,
-#' \url{https://arxiv.org/abs/1812.01723}}
+#' "Doubly Robust Difference-in-Differences Estimators." Journal of Econometrics, Vol. 219 (1), pp. 101-122,
+#' \doi{10.1016/j.jeconom.2020.06.003}}
 #'
 #'
 #'
@@ -91,12 +91,18 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   reg.coeff.pre <- stats::coef(stats::lm(y ~ -1 + int.cov,
                                          subset = ((D==0) & (post==0)),
                                          weights = i.weights))
+  if(anyNA(reg.coeff.pre)){
+    stop("Outcome regression model coefficients have NA components. \n Multicollinearity of covariates is probably the reason for it.")
+  }
   out.y.pre <-   as.vector(tcrossprod(reg.coeff.pre, int.cov))
   #-----------------------------------------------------------------------------
   #Compute the Outcome regression for the control group at the pre-treatment period, using ols.
   reg.coeff.post <- stats::coef(stats::lm(y ~ -1 + int.cov,
                                           subset = ((D==0) & (post==1)),
                                           weights = i.weights))
+  if(anyNA(reg.coeff.post)){
+    stop("Outcome regression model coefficients have NA components. \n Multicollinearity (or lack of variation) of covariates is probably the reason for it.")
+  }
   out.y.post <-   as.vector(tcrossprod(reg.coeff.post, int.cov))
   #-----------------------------------------------------------------------------
   #Compute the OR DID estimators

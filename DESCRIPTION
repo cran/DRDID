@@ -1,14 +1,14 @@
 Package: DRDID
 Type: Package
 Title: Doubly Robust Difference-in-Differences Estimators
-Version: 1.0.0
+Version: 1.0.1
 Authors@R: c(person("Pedro H. C.", "Sant'Anna", email = "pedro.h.santanna@vanderbilt.edu",
               role = c("aut", "cre")),
-              person("Jun B.", "Zhao", email = "jun.zhao@vanderbilt.edu",role = c("aut"))
+              person("Jun", "Zhao", email = "jun.zhao@vanderbilt.edu",role = c("aut"))
             )
 Description: Implements the locally efficient doubly robust difference-in-differences (DiD)
     estimators for the average treatment effect proposed by Sant'Anna and Zhao (2020)
-    <arXiv:1812.01723>. The estimator combines inverse probability weighting and outcome
+    <doi:10.1016/j.jeconom.2020.06.003>. The estimator combines inverse probability weighting and outcome
     regression estimators (also implemented in the package) to form estimators with
     more attractive statistical properties. Two different estimation methods can be used
     to estimate the nuisance functions.
@@ -17,17 +17,17 @@ URL: https://pedrohcgs.github.io/DRDID/,
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Depends: R (>= 3.4)
+Depends: R (>= 4.0)
 Imports: stats, trust, BMisc (>= 1.4.1)
-RoxygenNote: 7.1.0
+RoxygenNote: 7.1.1
 Suggests: knitr, rmarkdown, spelling, testthat, covr
-Date: 2020-05-12 13:00
+Date: 2021-01-07
 Language: en-US
 BugReports: https://github.com/pedrohcgs/DRDID/issues
 NeedsCompilation: no
-Packaged: 2020-05-12 17:46:49 UTC; santanph
+Packaged: 2021-01-07 18:13:23 UTC; santanph
 Author: Pedro H. C. Sant'Anna [aut, cre],
-  Jun B. Zhao [aut]
+  Jun Zhao [aut]
 Maintainer: Pedro H. C. Sant'Anna <pedro.h.santanna@vanderbilt.edu>
 Repository: CRAN
-Date/Publication: 2020-05-18 14:50:10 UTC
+Date/Publication: 2021-01-07 21:30:20 UTC

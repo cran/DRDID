@@ -41,13 +41,13 @@ NULL
 
 #' @references
 #' \cite{Heckman, James J., Ichimura, Hidehiko, and Todd, Petra E. (1997),"Matching as an Econometric Evaluation Estimator: Evidence from Evaluating a Job Training Programme",
-#' Review of Economic Studies, vol. 64(4), p. 605–654, \url{https://doi.org/10.2307/2971733}.
+#' Review of Economic Studies, vol. 64(4), p. 605–654, \doi{10.2307/2971733}.
 #' }
 #'
 #'
 #' \cite{Sant'Anna, Pedro H. C. and Zhao, Jun. (2020),
-#' "Doubly Robust Difference-in-Differences Estimators." Journal of Econometrics, Forthcoming,
-#' \url{https://arxiv.org/abs/1812.01723}}
+#' "Doubly Robust Difference-in-Differences Estimators." Journal of Econometrics, Vol. 219 (1), pp. 101-122,
+#' \doi{10.1016/j.jeconom.2020.06.003}}
 #'
 #'
 #' @examples
@@ -96,6 +96,9 @@ reg_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   reg.coeff <- stats::coef(stats::lm(deltaY ~ -1 + int.cov,
                                      subset = D==0,
                                      weights = i.weights))
+  if(anyNA(reg.coeff)){
+    stop("Outcome regression model coefficients have NA components. \n Multicollinearity (or lack of variation) of covariates is probably the reason for it.")
+  }
   out.delta <-   as.vector(tcrossprod(reg.coeff, int.cov))
   #-----------------------------------------------------------------------------
   #Compute the OR-DID estimator
