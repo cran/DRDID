@@ -1,7 +1,7 @@
 Package: DRDID
 Type: Package
 Title: Doubly Robust Difference-in-Differences Estimators
-Version: 1.0.1
+Version: 1.0.3
 Authors@R: c(person("Pedro H. C.", "Sant'Anna", email = "pedro.h.santanna@vanderbilt.edu",
               role = c("aut", "cre")),
               person("Jun", "Zhao", email = "jun.zhao@vanderbilt.edu",role = c("aut"))
@@ -19,15 +19,15 @@ Encoding: UTF-8
 LazyData: true
 Depends: R (>= 4.0)
 Imports: stats, trust, BMisc (>= 1.4.1)
-RoxygenNote: 7.1.1
-Suggests: knitr, rmarkdown, spelling, testthat, covr
-Date: 2021-01-07
+RoxygenNote: 7.1.2
+Suggests: knitr, rmarkdown, spelling, testthat
+Date: 2021-11-012
 Language: en-US
 BugReports: https://github.com/pedrohcgs/DRDID/issues
 NeedsCompilation: no
-Packaged: 2021-01-07 18:13:23 UTC; santanph
+Packaged: 2021-11-13 07:21:21 UTC; psantanna
 Author: Pedro H. C. Sant'Anna [aut, cre],
   Jun Zhao [aut]
 Maintainer: Pedro H. C. Sant'Anna <pedro.h.santanna@vanderbilt.edu>
 Repository: CRAN
-Date/Publication: 2021-01-07 21:30:20 UTC
+Date/Publication: 2021-11-13 07:40:02 UTC

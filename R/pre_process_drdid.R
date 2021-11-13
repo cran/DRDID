@@ -51,6 +51,7 @@ pre_process_drdid <- function(yname,
     dta <- as.data.frame(dta)
   }
 
+
   # Flag for yname
   if ( !is.element(yname, base::colnames(dta))) {
     stop("yname = ",yname,  " could not be found in the data provided.")
@@ -87,6 +88,38 @@ pre_process_drdid <- function(yname,
   base::ifelse(is.null(weightsname), w <- rep(1,nrow(dta)), w <- dta[,weightsname])
   dta$w <- w
 
+
+  # make sure time periods are numeric
+  if (! (is.numeric(dta[, tname])) ) {
+    stop("data[, tname] must be numeric. Please convert it.")
+
+  }
+
+  #  make sure dname is numeric
+  if (! (is.numeric(dta[, dname])) ) {
+    stop("data[, dname] must be numeric. Please convert it.")
+
+  }
+
+  #  make sure id is numeric
+  if (! is.null(idname)){
+    #  make sure id is numeric
+    if (! (is.numeric(dta[, idname])) ) {
+      stop("data[, idname] must be numeric. Please convert it.")
+      }
+
+    # Check if idname is unique by tname
+    n_id_year = base::all( base::table(dta[, idname], dta[, tname]) <= 1)
+    if (! n_id_year) stop("The value of idname must be the unique (by tname)")
+
+    # make sure gname doesn't change across periods for particular individuals
+    if (!all(sapply( base::split(dta, dta[,idname]), function(df) {
+      length(unique(df[,dname]))==1
+    }))) {
+      stop("The value of dname must be the same across all periods for each particular unit")
+    }
+  }
+
   # figure out the time periods
   # list of dates from smallest to largest
   tlist <- unique(dta[,tname])[base::order(unique(dta[,tname]))]
@@ -102,10 +135,6 @@ pre_process_drdid <- function(yname,
          See package `did' for the cases with multiple groups and/or multiple time periods.")
   }
 
-  # check that time periods are numeric
-  if (!is.numeric(tlist)) {
-    warning("not guaranteed to order time periods correclty if they are not numeric")
-  }
 
   # put in blank xformla if no covariates
   if (is.null(xformla)) {
@@ -113,7 +142,7 @@ pre_process_drdid <- function(yname,
   }
 
   # If repeated cross section, allow for null idname
-  if(is.null(idname) && (panel == FALSE)){
+  if(is.null(idname) & (panel == FALSE)){
     dta$id <- seq(1:nrow(dta))
     idname <- "id"
   }
@@ -134,7 +163,10 @@ pre_process_drdid <- function(yname,
   # Post dummy will be denoted by post
   dta$post <- as.numeric(dta[,tname] == tlist[2])
   # matrix of covariates
-  covariates <- stats::model.matrix(xformla, data=dta)
+  covariates <- stats::model.matrix(xformla,
+                                    stats::model.frame(xformla,
+                                                       data = dta,
+                                                       na.action=na.pass) )
 
   #check if covariates and group are time invariant in the panel data case.
   # matrix of covariates for pre-period and post periods
@@ -171,7 +203,7 @@ pre_process_drdid <- function(yname,
 
   # warn if some groups are small
   if (nrow(gsize) > 0) {
-    warning(paste0(" Either treatment or the comparison group in your dataset is fairly small. Proceed with caution."))
+    stop(paste0(" Either treatment or the comparison group in your dataset is very small. Inference is not feasible "))
   }
   #-----------------------------------------------------------------------------
   # setup data in panel case
