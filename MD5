@@ -1,6 +1,6 @@
-735d801c1e83b9b592db4f5e441e35e3 *DESCRIPTION
+5c4484a2a16fa82307228129776606b9 *DESCRIPTION
 7e5023459ced75ca16d990598de00728 *NAMESPACE
-3774474b2bc3c148e1d317362c3cc438 *NEWS.md
+5f1cceef699b07fccb179d9dc19646f9 *NEWS.md
 38db5be19a828fca511d35769818706e *R/aipw.did.panel.R
 72a085b4c8c6eba3a29e8865b2ca90ed *R/aipw_did_rc.R
 4fab1751276672363c4e1f7b15c9049f *R/aipw_did_rc1.R
@@ -25,7 +25,7 @@ e713e6a39b1d215a14748de29996a7ca *R/nsw_long.R
 f45fdc051e82bee6064224c3589f9547 *R/pre_process_drdid.R
 05a38918f9f532253f9d9b61f2ce2269 *R/print.drdid.R
 607f73cdc35fc6e0dd58632396bcd8ad *R/print.matrix.drdid.R
-e1d966384bb81cd8ce141aaa325d6952 *R/pscore.cal.R
+9dda3baae451e810efa319abb20e4288 *R/pscore.cal.R
 e615d49211084818436ab8283a0da6ce *R/reg_did_panel.R
 a50edc93c2a67c204773884707cd9469 *R/reg_did_rc.R
 604aec532f75bdd30bb82c64c75eec88 *R/sim_rc.R
@@ -48,10 +48,10 @@ d2ebb64fc24c779ffeaa385e2d4c84d9 *R/wboot_ipw_rc.R
 1a463cab5066d2cb4167ca1c19610ee3 *R/wboot_reg_rc.R
 4ec6005b597b31e984c3d0ef625a8038 *R/wboot_std_ipw_rc.R
 e524522f03e07fed09d032b6bbdb538d *R/wboot_twfe_rc.R
-450c1b650e954aad48eddf5b610df3da *R/wols.br.panel.R
-ff03e09f5ceaaecde5ae7e041f51bfd5 *R/wols_rc.R
-20ae03e2b5844a45c4b3b568632f943e *README.md
-044ca75e022407d232596cbe5dac9ada *build/partial.rdb
+890a0e37c3e5a1276153133281a9699d *R/wols.br.panel.R
+c666c849bdafb6962e075887cdb7e86b *R/wols_rc.R
+8edb025482916bada920b839882b87f9 *README.md
+2a9ccf7aa4b84f8bddb2ee4957d6e422 *build/partial.rdb
 421c13eed3fba1ce0657f77a3567f830 *data/nsw.rda
 51aeeb713d8a52e35f19862dbcf121b0 *data/nsw_long.rda
 fd84413da1c7d361c883d67944e67956 *data/sim_rc.rda
