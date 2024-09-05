@@ -99,9 +99,16 @@ reg_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   i.weights <- i.weights/mean(i.weights)
   #-----------------------------------------------------------------------------
   #Compute the Outcome regression for the control group using ols.
-  reg.coeff <- stats::coef(stats::lm(deltaY ~ -1 + int.cov,
-                                     subset = D==0,
-                                     weights = i.weights))
+  # reg.coeff <- stats::coef(stats::lm(deltaY ~ -1 + int.cov,
+  #                                    subset = D==0,
+  #                                    weights = i.weights))
+  control_filter <- (D == 0)
+  reg.coeff <- stats::coef(fastglm::fastglm(
+                            x = int.cov[control_filter, , drop = FALSE],
+                            y = deltaY[control_filter],
+                            weights = i.weights[control_filter],
+                            family = gaussian(link = "identity")
+  ))
   if(anyNA(reg.coeff)){
     stop("Outcome regression model coefficients have NA components. \n Multicollinearity (or lack of variation) of covariates is probably the reason for it.")
   }
@@ -127,7 +134,12 @@ reg_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   weights.ols <- i.weights * (1 - D)
   wols.x <- weights.ols * int.cov
   wols.eX <- weights.ols * (deltaY - out.delta) * int.cov
-  XpX.inv <- base::qr.solve(crossprod(wols.x, int.cov)/n)
+  XpX <- crossprod(wols.x, int.cov)/n
+  # Check if XpX is invertible
+  if ( base::rcond(XpX) < .Machine$double.eps) {
+    stop("The regression design matrix is singular. Consider removing some covariates.")
+  }
+  XpX.inv <- solve(XpX)
   asy.lin.rep.ols <-  wols.eX %*% XpX.inv
   #-----------------------------------------------------------------------------
   # Now, the influence function of the "treat" component

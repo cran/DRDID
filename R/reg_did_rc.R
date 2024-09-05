@@ -89,18 +89,33 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
 
   #-----------------------------------------------------------------------------
   #Compute the Outcome regression for the control group at the pre-treatment period, using ols.
-  reg.coeff.pre <- stats::coef(stats::lm(y ~ -1 + int.cov,
-                                         subset = ((D==0) & (post==0)),
-                                         weights = i.weights))
+  # reg.coeff.pre <- stats::coef(stats::lm(y ~ -1 + int.cov,
+  #                                        subset = ((D==0) & (post==0)),
+  #                                        weights = i.weights))
+
+  pre_filter <- (D == 0) & (post == 0)
+  reg.coeff.pre <- stats::coef(fastglm::fastglm(
+                        x = int.cov[pre_filter, , drop = FALSE],
+                        y = y[pre_filter],
+                        weights = i.weights[pre_filter],
+                        family = gaussian(link = "identity")
+  ))
   if(anyNA(reg.coeff.pre)){
     stop("Outcome regression model coefficients have NA components. \n Multicollinearity of covariates is probably the reason for it.")
   }
   out.y.pre <-   as.vector(tcrossprod(reg.coeff.pre, int.cov))
   #-----------------------------------------------------------------------------
   #Compute the Outcome regression for the control group at the pre-treatment period, using ols.
-  reg.coeff.post <- stats::coef(stats::lm(y ~ -1 + int.cov,
-                                          subset = ((D==0) & (post==1)),
-                                          weights = i.weights))
+  # reg.coeff.post <- stats::coef(stats::lm(y ~ -1 + int.cov,
+  #                                         subset = ((D==0) & (post==1)),
+  #                                         weights = i.weights))
+  post_filter <- (D == 0) & (post == 1)
+  reg.coeff.post <- stats::coef(fastglm::fastglm(
+                          x = int.cov[post_filter, , drop = FALSE],
+                          y = y[post_filter],
+                          weights = i.weights[post_filter],
+                          family = gaussian(link = "identity")
+  ))
   if(anyNA(reg.coeff.post)){
     stop("Outcome regression model coefficients have NA components. \n Multicollinearity (or lack of variation) of covariates is probably the reason for it.")
   }
@@ -130,14 +145,24 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   weights.ols.pre <- i.weights * (1 - D) * (1 - post)
   wols.x.pre <- weights.ols.pre * int.cov
   wols.eX.pre <- weights.ols.pre * (y - out.y.pre) * int.cov
-  XpX.inv.pre <- qr.solve(crossprod(wols.x.pre, int.cov)/n)
+  XpX_pre <- crossprod(wols.x.pre, int.cov)/n
+  # Check if XpX is invertible
+  if ( base::rcond(XpX_pre) < .Machine$double.eps) {
+    stop("The regression design matrix for pre-treatment is singular. Consider removing some covariates.")
+  }
+  XpX.inv.pre <- solve(XpX_pre)
   asy.lin.rep.ols.pre <-  wols.eX.pre %*% XpX.inv.pre
 
   # Asymptotic linear representation of OLS parameters in post-period
   weights.ols.post <- i.weights * (1 - D) * post
   wols.x.post <- weights.ols.post * int.cov
   wols.eX.post <- weights.ols.post * (y - out.y.post) * int.cov
-  XpX.inv.post <- qr.solve(crossprod(wols.x.post, int.cov)/n)
+  XpX_post <- crossprod(wols.x.post, int.cov)/n
+  # Check if XpX is invertible
+  if ( base::rcond(XpX_post) < .Machine$double.eps) {
+    stop("The regression design matrix for post-treatment is singular. Consider removing some covariates.")
+  }
+  XpX.inv.post <- solve(XpX_post)
   asy.lin.rep.ols.post <-  wols.eX.post %*% XpX.inv.post
   #-----------------------------------------------------------------------------
   # Now, the influence function of the "treat" component
