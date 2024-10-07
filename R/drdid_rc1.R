@@ -12,7 +12,7 @@ NULL
 #' @param post An \eqn{n} x \eqn{1} vector of Post-Treatment dummies (post = 1 if observation belongs to post-treatment period,
 #'             and post = 0 if observation belongs to pre-treatment period.)
 #' @param D An \eqn{n} x \eqn{1} vector of Group indicators (=1 if observation is treated in the post-treatment, =0 otherwise).
-#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the propensity score and regression estimation.
+#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the propensity score and regression estimation. Please add a vector of constants if you want to include an intercept in the models.
 #' If covariates = NULL, this leads to an unconditional DiD estimator.
 #' @param i.weights An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.
 #' @param boot Logical argument to whether bootstrap should be used for inference. Default is FALSE.
@@ -51,7 +51,7 @@ NULL
 #' }
 #' @examples
 #' # use the simulated data provided in the package
-#' covX = as.matrix(sim_rc[,5:8])
+#' covX = as.matrix(cbind( 1, sim_rc[,5:8]))
 #' # Implement the 'traditional' DR DiD estimator (not locally efficient!)
 #' drdid_rc1(y = sim_rc$y, post = sim_rc$post, D = sim_rc$d,
 #'           covariates= covX)
@@ -70,14 +70,11 @@ drdid_rc1 <-function(y, post, D, covariates, i.weights = NULL,
   y <- as.vector(y)
   # post as vector
   post <- as.vector(post)
-  # Add constant to covariate vector
-  int.cov <- as.matrix(rep(1,n))
-  if (!is.null(covariates)){
-    if(all(as.matrix(covariates)[,1]==rep(1,n))){
-      int.cov <- as.matrix(covariates)
-    } else {
-      int.cov <- as.matrix(cbind(1, covariates))
-    }
+  # Covariate vector
+  if(is.null(covariates)){
+    int.cov <- as.matrix(rep(1,n))
+  } else{
+    int.cov <- as.matrix(covariates)
   }
 
   # Weights
@@ -88,7 +85,15 @@ drdid_rc1 <-function(y, post, D, covariates, i.weights = NULL,
   i.weights <- i.weights/mean(i.weights)
   #-----------------------------------------------------------------------------
   #Compute the Pscore by MLE
-  pscore.tr <- stats::glm(D ~ -1 + int.cov, family = "binomial", weights = i.weights)
+  pscore.tr <- suppressWarnings(fastglm::fastglm(
+                                x = int.cov,
+                                y = D,
+                                family = stats::binomial(),
+                                weights = i.weights,
+                                intercept = FALSE,
+                                method = 3
+  ))
+  class(pscore.tr) <- "glm" #this allow us to use vcov
   if(pscore.tr$converged == FALSE){
     warning(" glm algorithm did not converge")
   }
@@ -98,6 +103,7 @@ drdid_rc1 <-function(y, post, D, covariates, i.weights = NULL,
   ps.fit <- as.vector(pscore.tr$fitted.values)
   # Avoid divide by zero
   ps.fit <- pmin(ps.fit, 1 - 1e-6)
+  W <- ps.fit * (1 - ps.fit) * i.weights
   #Compute the Outcome regression for the control group at the pre-treatment period, using ols.
   reg.coeff.pre <- stats::coef(stats::lm(y ~ -1 + int.cov,
                                          subset = ((D==0) & (post==0)),
@@ -168,7 +174,8 @@ drdid_rc1 <-function(y, post, D, covariates, i.weights = NULL,
 
   # Asymptotic linear representation of logit's beta's
   score.ps <- i.weights * (D - ps.fit) * int.cov
-  Hessian.ps <- stats::vcov(pscore.tr) * n
+  #Hessian.ps <- stats::vcov(pscore.tr) * n
+  Hessian.ps <- chol2inv(chol(t(int.cov) %*% (W * int.cov))) * n
   asy.lin.rep.ps <-  score.ps %*% Hessian.ps
   #-----------------------------------------------------------------------------
   # Now, the influence function of the "treat" component

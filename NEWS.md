@@ -1,3 +1,9 @@
+# DRDID 1.2.0
+  * Improve code to avoid redundant data checks
+  
+  * Use fastglm instead of parglm for improved speed
+
+  
 # DRDID 1.1.0
   * Restore solve as default to invert matrix, as it is faster than qr.solve for small matrices.
   

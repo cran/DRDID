@@ -11,7 +11,7 @@ NULL
 #' @param y1 An \eqn{n} x \eqn{1} vector of outcomes from the post-treatment period.
 #' @param y0 An \eqn{n} x \eqn{1} vector of outcomes from the pre-treatment period.
 #' @param D An \eqn{n} x \eqn{1} vector of Group indicators (=1 if observation is treated in the post-treatment, =0 otherwise).
-#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the propensity score estimation.
+#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the propensity score estimation. Please add a column of ones if you want to include an intercept in the model.
 #' If covariates = NULL, this leads to an unconditional DiD estimator.
 #' @param i.weights An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.
 #' @param boot Logical argument to whether bootstrap should be used for inference. Default is FALSE.
@@ -49,7 +49,7 @@ NULL
 #' unit_random <- sample(1:nrow(eval_lalonde_cps), 5000)
 #' eval_lalonde_cps <- eval_lalonde_cps[unit_random,]
 #' # Select some covariates
-#' covX = as.matrix(cbind(eval_lalonde_cps$age, eval_lalonde_cps$educ,
+#' covX = as.matrix(cbind(1, eval_lalonde_cps$age, eval_lalonde_cps$educ,
 #'                        eval_lalonde_cps$black, eval_lalonde_cps$married,
 #'                        eval_lalonde_cps$nodegree, eval_lalonde_cps$hisp,
 #'                        eval_lalonde_cps$re74))
@@ -70,15 +70,13 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   n <- length(D)
   # generate deltaY
   deltaY <- as.vector(y1 - y0)
-  # Add constant to covariate vector
-  int.cov <- as.matrix(rep(1,n))
-  if (!is.null(covariates)){
-    if(all(as.matrix(covariates)[,1]==rep(1,n))){
-      int.cov <- as.matrix(covariates)
-    } else {
-      int.cov <- as.matrix(cbind(1, covariates))
-    }
+  # Covariate vector
+  if(is.null(covariates)){
+    int.cov <- as.matrix(rep(1,n))
+  } else{
+    int.cov <- as.matrix(covariates)
   }
+
 
   # Weights
   if(is.null(i.weights)) {
@@ -87,15 +85,22 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   # Normalize weights
   i.weights <- i.weights/mean(i.weights)
   #-----------------------------------------------------------------------------
-  #Pscore estimation (logit) and also its fitted values
-  #PS <- suppressWarnings(stats::glm(D ~ -1 + int.cov, family = "binomial", weights = i.weights))
-  PS <- suppressWarnings(parglm::parglm(D ~ -1 + int.cov, family = "binomial", weights = i.weights))
+  # Pscore estimation (logit) and also its fitted values
+  PS <- suppressWarnings(fastglm::fastglm(
+                          x = int.cov,
+                          y = D,
+                          family = stats::binomial(),
+                          weights = i.weights,
+                          intercept = FALSE,
+                          method = 3
+  ))
   if(PS$converged == FALSE){
     warning("Propernsity score estimation did not converge.")
   }
-  ps.fit <- as.vector(PS$fitted.values)
+  ps.fit <- fitted(PS)
   # Do not divide by zero
   ps.fit <- pmin(ps.fit, 1 - 1e-6)
+  W <- ps.fit * (1 - ps.fit) * i.weights
   #-----------------------------------------------------------------------------
   #Compute IPW estimator
   # First, the weights
@@ -114,7 +119,8 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   #-----------------------------------------------------------------------------
   # Asymptotic linear representation of logit's beta's
   score.ps <- i.weights * (D - ps.fit) * int.cov
-  Hessian.ps <- stats::vcov(PS) * n
+  #Hessian.ps <- stats::vcov(PS) * n
+  Hessian.ps <- chol2inv(chol(t(int.cov) %*% (W * int.cov))) * n
   asy.lin.rep.ps <-  score.ps %*% Hessian.ps
   #-----------------------------------------------------------------------------
   # Now, the influence function of the "treat" component
@@ -127,7 +133,10 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   # Derivative matrix (k x 1 vector)
   M2 <- base::colMeans(w.cont *(deltaY - eta.cont) * int.cov)
   # Now the influence function related to estimation effect of pscores
+  # Batch multiple matrix multiplications for inf functions
+  #batch_results <- batch_matrix_operations(NULL, NULL, score.ps, Hessian.ps, NULL, M2, NULL)
   inf.cont.2 <- asy.lin.rep.ps %*% M2
+  #inf.cont.2 <- batch_results$inf_cont_2
 
   # Influence function for the control component
   inf.control <- (inf.cont.1 + inf.cont.2) / mean(w.cont)
@@ -138,9 +147,9 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
   if (boot == FALSE) {
     # Estimate of standard error
     se.att <- stats::sd(att.inf.func)/sqrt(n)
-    # Estimate of upper boudary of 95% CI
+    # Estimate of upper boundary of 95% CI
     uci <- ipw.att + 1.96 * se.att
-    # Estimate of lower doundary of 95% CI
+    # Estimate of lower boundary of 95% CI
     lci <- ipw.att - 1.96 * se.att
 
     #Create this null vector so we can export the bootstrap draws too.
@@ -153,11 +162,11 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
       ipw.boot <- mboot.did(att.inf.func, nboot)
       # get bootstrap std errors based on IQR
       se.att <- stats::IQR(ipw.boot) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-      # get symmtric critival values
+      # get symmetric critical values
       cv <- stats::quantile(abs(ipw.boot/se.att), probs = 0.95)
-      # Estimate of upper boudary of 95% CI
+      # Estimate of upper boundary of 95% CI
       uci <- ipw.att + cv * se.att
-      # Estimate of lower doundary of 95% CI
+      # Estimate of lower boundary of 95% CI
       lci <- ipw.att - cv * se.att
     } else {
       # do weighted bootstrap
@@ -165,11 +174,11 @@ std_ipw_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
                                 n = n, deltaY = deltaY, D = D, int.cov = int.cov, i.weights = i.weights))
       # get bootstrap std errors based on IQR
       se.att <- stats::IQR(ipw.boot - ipw.att) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-      # get symmtric critival values
+      # get symmetric critical values
       cv <- stats::quantile(abs((ipw.boot - ipw.att)/se.att), probs = 0.95)
-      # Estimate of upper boudary of 95% CI
+      # Estimate of upper boundary of 95% CI
       uci <- ipw.att + cv * se.att
-      # Estimate of lower doundary of 95% CI
+      # Estimate of lower boundary of 95% CI
       lci <- ipw.att - cv * se.att
 
     }

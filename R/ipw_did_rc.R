@@ -13,7 +13,7 @@ NULL
 #' @param post An \eqn{n} x \eqn{1} vector of Post-Treatment dummies (post = 1 if observation belongs to post-treatment period,
 #'             and post = 0 if observation belongs to pre-treatment period.)
 #' @param D An \eqn{n} x \eqn{1} vector of Group indicators (=1 if observation is treated in the post-treatment, =0 otherwise).
-#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the propensity score estimation.
+#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the propensity score estimation. Please add a column of constants if you want to include an intercept in the model.
 #' If covariates = NULL, this leads to an unconditional DiD estimator.
 #' @param i.weights An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.
 #' @param boot Logical argument to whether bootstrap should be used for inference. Default is FALSE.
@@ -43,7 +43,7 @@ NULL
 #'
 #' @examples
 #' # use the simulated data provided in the package
-#' covX = as.matrix(sim_rc[,5:8])
+#' covX = as.matrix(cbind(1, sim_rc[,5:8]))
 #' # Implement unnormalized IPW DiD estimator
 #' ipw_did_rc(y = sim_rc$y, post = sim_rc$post, D = sim_rc$d,
 #'            covariates= covX)
@@ -62,15 +62,13 @@ ipw_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   y <- as.vector(y)
   # post as vector
   post <- as.vector(post)
-  # Add constant to covariate vector
-  int.cov <- as.matrix(rep(1,n))
-  if (!is.null(covariates)){
-    if(all(as.matrix(covariates)[,1]==rep(1,n))){
-      int.cov <- as.matrix(covariates)
-    } else {
-      int.cov <- as.matrix(cbind(1, covariates))
-    }
+  # Covariate vector
+  if(is.null(covariates)){
+    int.cov <- as.matrix(rep(1,n))
+  } else{
+    int.cov <- as.matrix(covariates)
   }
+
   # Weights
   if(is.null(i.weights)) {
     i.weights <- as.vector(rep(1, n))
@@ -80,7 +78,15 @@ ipw_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   #-----------------------------------------------------------------------------
   #Pscore estimation (logit) and also its fitted values
   #PS <- suppressWarnings(stats::glm(D ~ -1 + int.cov, family = "binomial", weights = i.weights))
-  PS <- suppressWarnings(parglm::parglm(D ~ -1 + int.cov, family = "binomial", weights = i.weights))
+  PS <- suppressWarnings(fastglm::fastglm(
+                                x = int.cov,
+                                y = D,
+                                family = stats::binomial(),
+                                weights = i.weights,
+                                intercept = FALSE,
+                                method = 3
+  ))
+  class(PS) <- "glm" #this allow us to use vcov
   if(PS$converged == FALSE){
     warning(" glm algorithm did not converge")
   }
@@ -90,6 +96,7 @@ ipw_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   ps.fit <- as.vector(PS$fitted.values)
   # Do not divide by zero
   ps.fit <- pmin(ps.fit, 1 - 1e-6)
+  W <- ps.fit * (1 - ps.fit) * i.weights
   #-----------------------------------------------------------------------------
   #Compute IPW estimator
   # First, the weights
@@ -121,7 +128,8 @@ ipw_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   #-----------------------------------------------------------------------------
   # Asymptotic linear representation of logit's beta's
   score.ps <- i.weights * (D - ps.fit) * int.cov
-  Hessian.ps <- stats::vcov(PS) * n
+  #Hessian.ps <- stats::vcov(PS) * n
+  Hessian.ps <- chol2inv(chol(t(int.cov) %*% (W * int.cov))) * n
   asy.lin.rep.ps <-  score.ps %*% Hessian.ps
   #-----------------------------------------------------------------------------
   # Influence function of the treated components

@@ -9,7 +9,7 @@ NULL
 #' @param post An \eqn{n} x \eqn{1} vector of Post-Treatment dummies (post = 1 if observation belongs to post-treatment period,
 #'             and post = 0 if observation belongs to pre-treatment period.)
 #' @param D An \eqn{n} x \eqn{1} vector of Group indicators (=1 if observation is treated in the post-treatment, =0 otherwise).
-#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the regression estimation.
+#' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the regression estimation. Please add a column of ones if you want to include an intercept.
 #' If covariates = NULL, this leads to an unconditional DiD estimator.
 #' @param i.weights An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.
 #' @param boot Logical argument to whether bootstrap should be used for inference. Default is FALSE.
@@ -52,7 +52,7 @@ NULL
 #'
 #' @examples
 #' # use the simulated data provided in the package
-#' covX = as.matrix(sim_rc[,5:8])
+#' covX = as.matrix(cbind(1, sim_rc[,5:8]))
 #' # Implement OR DiD estimator
 #' reg_did_rc(y = sim_rc$y, post = sim_rc$post, D = sim_rc$d,
 #'            covariates= covX)
@@ -71,15 +71,13 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   n <- length(D)
   # outcome of interested
   y <- as.vector(y)
-  # Add constant to covariate vector
-  int.cov <- as.matrix(rep(1,n))
-  if (!is.null(covariates)){
-    if(all(as.matrix(covariates)[,1]==rep(1,n))){
-      int.cov <- as.matrix(covariates)
-    } else {
-      int.cov <- as.matrix(cbind(1, covariates))
-    }
+  # Covariate vector
+  if(is.null(covariates)){
+    int.cov <- as.matrix(rep(1,n))
+  } else{
+    int.cov <- as.matrix(covariates)
   }
+
   # Weights
   if(is.null(i.weights)) {
     i.weights <- as.vector(rep(1, n))
@@ -145,6 +143,7 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   weights.ols.pre <- i.weights * (1 - D) * (1 - post)
   wols.x.pre <- weights.ols.pre * int.cov
   wols.eX.pre <- weights.ols.pre * (y - out.y.pre) * int.cov
+  #XpX_pre <- opt_crossprod(wols.x.pre, int.cov, n)
   XpX_pre <- crossprod(wols.x.pre, int.cov)/n
   # Check if XpX is invertible
   if ( base::rcond(XpX_pre) < .Machine$double.eps) {
@@ -157,6 +156,7 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
   weights.ols.post <- i.weights * (1 - D) * post
   wols.x.post <- weights.ols.post * int.cov
   wols.eX.post <- weights.ols.post * (y - out.y.post) * int.cov
+  #XpX_post <- opt_crossprod(wols.x.post, int.cov, n)
   XpX_post <- crossprod(wols.x.post, int.cov)/n
   # Check if XpX is invertible
   if ( base::rcond(XpX_post) < .Machine$double.eps) {
@@ -205,11 +205,11 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
       reg.boot <- mboot.did(reg.att.inf.func, nboot)
       # get bootstrap std errors based on IQR
       se.reg.att <- stats::IQR(reg.boot) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-      # get symmtric critival values
+      # get symmetric critical values
       cv <- stats::quantile(abs(reg.boot/se.reg.att), probs = 0.95)
-      # Estimate of upper boudary of 95% CI
+      # Estimate of upper boundary of 95% CI
       uci <- reg.att + cv * se.reg.att
-      # Estimate of lower doundary of 95% CI
+      # Estimate of lower boundary of 95% CI
       lci <- reg.att - cv * se.reg.att
     } else {
       # do weighted bootstrap
@@ -217,11 +217,11 @@ reg_did_rc <-function(y, post, D, covariates, i.weights = NULL,
                                 n = n, y = y, post = post, D = D, int.cov = int.cov, i.weights = i.weights))
       # get bootstrap std errors based on IQR
       se.reg.att <- stats::IQR((reg.boot - reg.att)) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-      # get symmtric critival values
+      # get symmetric critical values
       cv <- stats::quantile(abs((reg.boot - reg.att)/se.reg.att), probs = 0.95)
-      # Estimate of upper boudary of 95% CI
+      # Estimate of upper boundary of 95% CI
       uci <- reg.att + cv * se.reg.att
-      # Estimate of lower doundary of 95% CI
+      # Estimate of lower boundary of 95% CI
       lci <- reg.att - cv * se.reg.att
 
     }
