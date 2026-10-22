@@ -16,9 +16,11 @@ NULL
 #' If covariates = NULL, this leads to an unconditional DiD estimator.
 #' @param i.weights An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.
 #' @param boot Logical argument to whether bootstrap should be used for inference. Default is FALSE.
+#' Exactly zero centered bootstrap draws give a zero standard error and point interval.
+#' Nonfinite draws or a zero IQR with nonzero draws stop with an error.
 #' @param boot.type Type of bootstrap to be performed (not relevant if \code{boot = FALSE}). Options are "weighted" and "multiplier".
 #' If \code{boot = TRUE}, default is "weighted".
-#' @param nboot Number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.
+#' @param nboot A finite scalar integer of at least 2 giving the number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.
 #' @param inffunc Logical argument to whether influence function should be returned. Default is FALSE.
 #'
 #' @return A list containing the following components:
@@ -27,9 +29,9 @@ NULL
 #'  \item{uci}{The upper bound of the 95\% CI for the ATT.}
 #'  \item{lci}{The lower bound of the 95\% CI for the ATT}
 #'  \item{boots}{All Bootstrap draws of the ATT, in case bootstrap was used to conduct inference. Default is \code{NULL}.}
-#'  \item{ps.flag}{Convergence Flag for the propensity score estimation: =0 if \code{trust} algorithm converged,
-#'    =1 if IPW algorithm converged (in case it was used), =2 if GLM logit estimator was used (i.e., if both \code{trust} and IPT
-#'    did not converged).}
+#'  \item{ps.flag}{Source of the verified IPT propensity-score fit: =0 for the \code{trust}
+#'    candidate, =1 for the secondary IPT candidate. A candidate must satisfy the original
+#'    exponential-IPT equations to numerical tolerance; optimizer status alone is insufficient.}
 #'  \item{att.inf.func}{Estimate of the influence function. Default is NULL}
 #'  \item{call.param}{The matched call.}
 #'  \item{argu}{Some arguments used (explicitly or not) in the call (panel = TRUE, estMethod = "imp", boot, boot.type, nboot, type="dr")}
@@ -48,6 +50,14 @@ NULL
 #'
 #' @details
 #'
+#' Propensity-score fitting must satisfy the original exponential-IPT equations; numerically
+#' ill-conditioned designs are rejected. If neither
+#' fitting route provides a verified solution, estimation stops rather than substituting
+#' a logit MLE. To explicitly use the traditional estimator, call \code{drdid_panel()}
+#' (or \code{drdid(..., estMethod = "trad")}). This changes both propensity-score and
+#' outcome-regression fitting. Each weighted-bootstrap replicate must also have a verified
+#' IPT fit; a failed replicate stops the bootstrap without skipping or redrawing it.
+#'
 #' The \code{drdid_imp_panel} function implements the locally efficient doubly robust difference-in-differences (DiD)
 #' estimator for the average treatment effect on the treated (ATT) defined in equation (3.1)
 #' in Sant'Anna and Zhao (2020). This estimator makes use of a logistic propensity score model for the probability
@@ -61,8 +71,13 @@ NULL
 #' the propensity score estimates; see Sant'Anna and Zhao (2020) for details.
 #'
 #'
-#' The resulting estimator is not only locally efficient and doubly robust for the ATT,
-#' but it is also doubly robust for inference; see Sant'Anna and Zhao (2020) for details.
+#' Under the conditions in Sant'Anna and Zhao (2020), with trimming and
+#' propensity-score clipping inactive, the resulting estimator is locally efficient,
+#' doubly robust for the ATT, and doubly robust for inference.
+#' The weighted bootstrap refits the implemented point statistic. After active
+#' trimming or clipping, the IPT/WLS balance identities need not hold for the
+#' modified statistic; matching bootstrap refits alone does not establish these
+#' double-robustness or influence-function guarantees.
 #'
 #'
 #' @examples
@@ -88,9 +103,12 @@ NULL
 
 drdid_imp_panel <-function(y1, y0, D, covariates, i.weights = NULL, boot = FALSE, boot.type = "weighted",
                            nboot = NULL, inffunc = FALSE, trim.level = 0.995){
+  if (boot) nboot <- validate_bootstrap_count(nboot)
+
   #-----------------------------------------------------------------------------
   # D as vector
   D <- as.vector(D)
+  validate_treatment_indicator(D)
   # Sample size
   n <- length(D)
   # generate deltaY
@@ -105,7 +123,8 @@ drdid_imp_panel <-function(y1, y0, D, covariates, i.weights = NULL, boot = FALSE
   # Weights
   if(is.null(i.weights)) {
     i.weights <- as.vector(rep(1, n))
-  } else if(min(i.weights) < 0) stop("i.weights must be non-negative")
+  }
+  validate_sampling_weights(i.weights, n)
 
   # Normalize weights
   i.weights <- i.weights/mean(i.weights)
@@ -139,21 +158,17 @@ drdid_imp_panel <-function(y1, y0, D, covariates, i.weights = NULL, boot = FALSE
   }
 
   if (boot == TRUE) {
-    if (is.null(nboot) == TRUE) nboot = 999
     if(boot.type == "multiplier"){
       # do multiplier bootstrap
       dr.boot <- mboot.did(dr.att.inf.func, nboot)
       # get bootstrap std errors based on IQR
-      se.dr.att <- stats::IQR(dr.boot) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-      # get symmtric critival values
-      cv <- stats::quantile(abs(dr.boot/se.dr.att), probs = 0.95)
-      # Estimate of upper boudary of 95% CI
-      uci <- dr.att + cv * se.dr.att
-      # Estimate of lower doundary of 95% CI
-      lci <- dr.att - cv * se.dr.att
+      boot.summary <- bootstrap_inference(dr.boot, dr.att)
+      se.dr.att <- boot.summary$se
+      uci <- boot.summary$uci
+      lci <- boot.summary$lci
     } else {
       # do weighted bootstrap
-      dr.boot <- unlist(lapply(1:nboot,
+      dr.boot <- unlist(lapply(seq_len(nboot),
                                wboot.dr.imp.panel,
                                n = n,
                                deltaY = deltaY,
@@ -162,13 +177,10 @@ drdid_imp_panel <-function(y1, y0, D, covariates, i.weights = NULL, boot = FALSE
                                i.weights = i.weights,
                                trim.level = trim.level))
       # get bootstrap std errors based on IQR
-      se.dr.att <- stats::IQR((dr.boot - dr.att)) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-      # get symmtric critival values
-      cv <- stats::quantile(abs((dr.boot - dr.att)/se.dr.att), probs = 0.95)
-      # Estimate of upper boudary of 95% CI
-      uci <- dr.att + cv * se.dr.att
-      # Estimate of lower doundary of 95% CI
-      lci <- dr.att - cv * se.dr.att
+      boot.summary <- bootstrap_inference((dr.boot - dr.att), dr.att)
+      se.dr.att <- boot.summary$se
+      uci <- boot.summary$uci
+      lci <- boot.summary$lci
 
     }
   }

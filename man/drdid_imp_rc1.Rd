@@ -30,12 +30,14 @@ If covariates = NULL, this leads to an unconditional DiD estimator.}
 
 \item{i.weights}{An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights.}
 
-\item{boot}{Logical argument to whether bootstrap should be used for inference. Default is FALSE.}
+\item{boot}{Logical argument to whether bootstrap should be used for inference. Default is FALSE.
+Exactly zero centered bootstrap draws give a zero standard error and point interval.
+Nonfinite draws or a zero IQR with nonzero draws stop with an error.}
 
 \item{boot.type}{Type of bootstrap to be performed (not relevant if \code{boot = FALSE}). Options are "weighted" and "multiplier".
 If \code{boot = TRUE}, default is "weighted".}
 
-\item{nboot}{Number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.}
+\item{nboot}{A finite scalar integer of at least 2 giving the number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.}
 
 \item{inffunc}{Logical argument to whether influence function should be returned. Default is FALSE.}
 
@@ -48,9 +50,9 @@ A list containing the following components:
 \item{uci}{Estimate of the upper bound of a 95\% CI for the ATT}
 \item{lci}{Estimate of the lower bound of a 95\% CI for the ATT}
 \item{boots}{All Bootstrap draws of the ATT, in case bootstrap was used to conduct inference. Default is NULL}
- \item{ps.flag}{Convergence Flag for the propensity score estimation: =0 if \code{trust} algorithm converged,
-   =1 if IPW algorithm converged (in case it was used), =2 if GLM logit estimator was used (i.e., if both \code{trust} and IPT
-   did not converged).}
+ \item{ps.flag}{Source of the verified IPT propensity-score fit: =0 for the \code{trust}
+   candidate, =1 for the secondary IPT candidate. A candidate must satisfy the original
+   exponential-IPT equations to numerical tolerance; optimizer status alone is insufficient.}
  \item{att.inf.func}{Estimate of the influence function. Default is NULL}
  \item{call.param}{The matched call.}
  \item{argu}{Some arguments used (explicitly or not) in the call (panel = FALSE, estMethod = "imp2", boot, boot.type, nboot, type="dr")}
@@ -61,6 +63,14 @@ A list containing the following components:
  though it is not locally efficient; see Section 3.2 of Sant'Anna and Zhao (2020).
 }
 \details{
+Propensity-score fitting must satisfy the original exponential-IPT equations; numerically
+ill-conditioned designs are rejected. If neither
+fitting route provides a verified solution, estimation stops rather than substituting
+a logit MLE. To explicitly use the corresponding traditional estimator, call \code{drdid_rc1()}
+to preserve this estimator variant. This changes both propensity-score and
+outcome-regression fitting. Each weighted-bootstrap replicate must also have a verified
+IPT fit; a failed replicate stops the bootstrap without skipping or redrawing it.
+
 The \code{drdid_imp_rc1} function implements the doubly robust difference-in-differences (DiD)
 estimator for the average treatment effect on the treated (ATT) defined in equation (3.3)
 in Sant'Anna and Zhao (2020). This estimator makes use of a logistic propensity score model for the probability

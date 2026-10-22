@@ -27,12 +27,14 @@ twfe_did_panel(
 
 \item{i.weights}{An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.}
 
-\item{boot}{Logical argument to whether bootstrap should be used for inference. Default is FALSE.}
+\item{boot}{Logical argument to whether bootstrap should be used for inference. Default is FALSE.
+Exactly zero centered bootstrap draws give a zero standard error and point interval.
+Nonfinite draws or a zero IQR with nonzero draws stop with an error.}
 
 \item{boot.type}{Type of bootstrap to be performed (not relevant if \code{boot = FALSE}). Options are "weighted" and "multiplier".
 If \code{boot = TRUE}, default is "weighted".}
 
-\item{nboot}{Number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.}
+\item{nboot}{A finite scalar integer of at least 2 giving the number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.}
 
 \item{inffunc}{Logical argument to whether influence function should be returned. Default is FALSE.}
 }
@@ -43,12 +45,24 @@ A list containing the following components:
  \item{uci}{Estimate of the upper bound of a 95\% CI for the TWFE parameter.}
  \item{lci}{Estimate of the lower bound of a 95\% CI for the TWFE parameter.}
  \item{boots}{All Bootstrap draws of the ATT, in case bootstrap was used to conduct inference. Default is NULL}
- \item{att.inf.func}{Estimate of the influence function. Default is NULL}
+ \item{att.inf.func}{A vector of \eqn{n} estimated influence values, one per individual,
+ in the same order as \code{y0} and \code{y1}. Default is NULL.}
 }
 \description{
 \code{twfe_did_panel} is used to compute linear two-way fixed effects estimators for the ATT
  in difference-in-differences (DiD) setups with panel data. As illustrated by Sant'Anna and Zhao (2020),
  this estimator generally do not recover the ATT. We encourage empiricists to adopt alternative specifications.
+}
+\details{
+Analytical inference clusters the two observations of each individual together.
+The variance is the sum of squared centered individual influence values divided
+by \eqn{n^2}, without degrees-of-freedom or cluster-count corrections. Both
+bootstrap methods also apply a common random weight to an individual's two observations.
+
+Inputs must be complete and have one observation per individual: \code{y0},
+\code{y1}, \code{D}, and non-NULL weights must have the same length, and
+non-NULL covariates must have one row per individual. Remove incomplete
+individuals before calling this function; it does not drop observations internally.
 }
 \examples{
 # Form the Lalonde sample with CPS comparison group

@@ -13,9 +13,11 @@ NULL
 #' @param covariates An \eqn{n} x \eqn{k} matrix of covariates to be used in the regression estimation. We will always include an intercept.
 #' @param i.weights An \eqn{n} x \eqn{1} vector of weights to be used. If NULL, then every observation has the same weights. The weights are normalized and therefore enforced to have mean 1 across all observations.
 #' @param boot Logical argument to whether bootstrap should be used for inference. Default is FALSE.
+#' Exactly zero centered bootstrap draws give a zero standard error and point interval.
+#' Nonfinite draws or a zero IQR with nonzero draws stop with an error.
 #' @param boot.type Type of bootstrap to be performed (not relevant if \code{boot = FALSE}). Options are "weighted" and "multiplier".
 #' If \code{boot = TRUE}, default is "weighted".
-#' @param nboot Number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.
+#' @param nboot A finite scalar integer of at least 2 giving the number of bootstrap repetitions (not relevant if \code{boot = FALSE}). Default is 999.
 #' @param inffunc Logical argument to whether influence function should be returned. Default is FALSE.
 #'
 #' @return A list containing the following components:
@@ -24,7 +26,19 @@ NULL
 #'  \item{uci}{Estimate of the upper bound of a 95\% CI for the TWFE parameter.}
 #'  \item{lci}{Estimate of the lower bound of a 95\% CI for the TWFE parameter.}
 #'  \item{boots}{All Bootstrap draws of the ATT, in case bootstrap was used to conduct inference. Default is NULL}
-#'  \item{att.inf.func}{Estimate of the influence function. Default is NULL}
+#'  \item{att.inf.func}{A vector of \eqn{n} estimated influence values, one per individual,
+#'  in the same order as \code{y0} and \code{y1}. Default is NULL.}
+#'
+#' @details
+#' Analytical inference clusters the two observations of each individual together.
+#' The variance is the sum of squared centered individual influence values divided
+#' by \eqn{n^2}, without degrees-of-freedom or cluster-count corrections. Both
+#' bootstrap methods also apply a common random weight to an individual's two observations.
+#'
+#' Inputs must be complete and have one observation per individual: \code{y0},
+#' \code{y1}, \code{D}, and non-NULL weights must have the same length, and
+#' non-NULL covariates must have one row per individual. Remove incomplete
+#' individuals before calling this function; it does not drop observations internally.
 #' @examples
 #' # Form the Lalonde sample with CPS comparison group
 #' eval_lalonde_cps <- subset(nsw, nsw$treated == 0 | nsw$sample == 2)
@@ -47,15 +61,32 @@ NULL
 twfe_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
                           boot = FALSE, boot.type = "weighted", nboot = NULL,
                           inffunc = FALSE){
+  if (boot) nboot <- validate_bootstrap_count(nboot)
+
   #-----------------------------------------------------------------------------
   # D as vector
   D <- as.vector(D)
   # Sample size
   n <- length(D)
+  # Positional pre/post pairing requires complete, conformable unit inputs.
+  if (length(y0) != n || length(y1) != n) {
+    stop("y0 and y1 must each have one outcome per individual in D.")
+  }
+  if (!is.null(covariates) && nrow(as.matrix(covariates)) != n) {
+    stop("covariates must have one row per individual in D.")
+  }
+  if (!is.null(i.weights) && length(i.weights) != n) {
+    stop("i.weights must have one weight per individual in D.")
+  }
+  if (anyNA(y0) || anyNA(y1) || anyNA(D) || anyNA(covariates) || anyNA(i.weights)) {
+    stop("Panel inputs must be complete. Remove individuals with missing outcomes, treatment, covariates, or weights before calling twfe_did_panel().")
+  }
+  validate_treatment_indicator(D)
   # Weights
   if(is.null(i.weights)) {
     i.weights <- as.vector(rep(1, n))
-  } else if(min(i.weights) < 0) stop("i.weights must be non-negative")
+  }
+  validate_sampling_weights(i.weights, n)
   # Normalize weights
   i.weights <- i.weights/mean(i.weights)
   #-----------------------------------------------------------------------------
@@ -66,7 +97,7 @@ twfe_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
     if(all(as.matrix(covariates)[,1] == rep(1,n))) {
       # Remove intercept if you include it
       covariates <- as.matrix(covariates)
-      covariates <- covariates[,-1]
+      covariates <- covariates[, -1, drop = FALSE]
       if(dim(covariates)[2]==0) {
         covariates = NULL
         x = NULL
@@ -96,7 +127,8 @@ twfe_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
     #---------------------------------------------------------------------------
     #Estimate TWFE regression
 
-    reg <- stats::lm(y ~  dd:post + post + dd + x, x = TRUE, weights = i.weights)
+    reg <- stats::lm(y ~  dd:post + post + dd + x, x = TRUE, weights = i.weights,
+                     na.action = stats::na.fail)
 
 
     twfe.att <- reg$coefficients["dd:post"]
@@ -118,12 +150,14 @@ twfe_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
 
     sel.theta[index.theta, ] <- 1
     #-----------------------------------------------------------------------------
-    #get the influence function of the TWFE regression
-    att.inf.func <- as.vector(inf.reg %*% sel.theta)
+    # The row Hessian uses 2n observations. Average the two row contributions
+    # to obtain one influence value per independent panel unit.
+    row.inf.func <- as.vector(inf.reg %*% sel.theta)
+    att.inf.func <- (row.inf.func[seq_len(n)] + row.inf.func[n + seq_len(n)]) / 2
     #-----------------------------------------------------------------------------
     if (boot == FALSE) {
       # Estimate of standard error
-      se.twfe.att <- stats::sd(att.inf.func)/sqrt(length(att.inf.func))
+      se.twfe.att <- stats::sd(att.inf.func) * sqrt(n - 1) / n
       # Estimate of upper boudary of 95% CI
       uci <- twfe.att + 1.96 * se.twfe.att
       # Estimate of lower doundary of 95% CI
@@ -133,30 +167,23 @@ twfe_did_panel <-function(y1, y0, D, covariates, i.weights = NULL,
     }
 
     if (boot == TRUE) {
-      if (is.null(nboot) == TRUE) nboot = 999
       if(boot.type == "multiplier"){
         # do multiplier bootstrap
-        twfe.boot <- mboot.twfep.did(n, att.inf.func, nboot)
+        twfe.boot <- mboot.did(att.inf.func, nboot)
         # get bootstrap std errors based on IQR
-        se.twfe.att <- stats::IQR(twfe.boot) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-        # get symmetric critical values
-        cv <- stats::quantile(abs(twfe.boot/se.twfe.att), probs = 0.95)
-        # Estimate of the upper boundary of 95% CI
-        uci <- twfe.att + cv * se.twfe.att
-        # Estimate of lower boundary of 95% CI
-        lci <- twfe.att - cv * se.twfe.att
+        boot.summary <- bootstrap_inference(twfe.boot, twfe.att)
+        se.twfe.att <- boot.summary$se
+        uci <- boot.summary$uci
+        lci <- boot.summary$lci
       } else {
         # do weighted bootstrap
-        twfe.boot <- unlist(lapply(1:nboot, wboot.twfe.panel,
+        twfe.boot <- unlist(lapply(seq_len(nboot), wboot.twfe.panel,
                                    n = n, y = y, dd = dd, post = post, x = x, i.weights = i.weights))
         # get bootstrap std errors based on IQR
-        se.twfe.att <- stats::IQR((twfe.boot - twfe.att)) / (stats::qnorm(0.75) - stats::qnorm(0.25))
-        # get symmetric critical values
-        cv <- stats::quantile(abs((twfe.boot - twfe.att)/se.twfe.att), probs = 0.95)
-        # Estimate of the upper boundary of 95% CI
-        uci <- twfe.att + cv * se.twfe.att
-        # Estimate of lower boundary of 95% CI
-        lci <- twfe.att - cv * se.twfe.att
+        boot.summary <- bootstrap_inference((twfe.boot - twfe.att), twfe.att)
+        se.twfe.att <- boot.summary$se
+        uci <- boot.summary$uci
+        lci <- boot.summary$lci
 
       }
     }
