@@ -1,6 +1,6 @@
-c28f888c044b5dc4b37197ce5c98c6f4 *DESCRIPTION
+f091c6132ddba9f688e96e84b0db2720 *DESCRIPTION
 ef27428e66ff060223aefa41c5993a54 *NAMESPACE
-148bd7b2b786a54a7734d77f6894eaa7 *NEWS.md
+495ea907dbd6c6d8d73c02918f152fca *NEWS.md
 df6cc46bc7fae1a55b713f3d5065b35a *R/DRDID-package.R
 694ab49abaa9fbc5b8932b500e199034 *R/RcppExports.R
 34087bf4bac9cb10f5ea9e75673fb483 *R/aipw.did.panel.R
@@ -113,7 +113,7 @@ a7f0f4ada1de46aa2ce6cdd77252ee6e *tests/testthat/test_output.R
 b1859d4e6c6985149aaf516b279e148e *tests/testthat/test_preprocess_column_names.R
 5b9fd562b790ebb1f8df934c020d1037 *tests/testthat/test_rc.R
 4b500dce2e72498f5d32bace4e4855e9 *tests/testthat/test_rc_inffunc.R
-941794e67633a40701bdc042e7915017 *tests/testthat/test_regression_lock.R
+5bdcb8a38305fa8a45ab85c55864026e *tests/testthat/test_regression_lock.R
 f881c8a21e7d4e967880efeb92f7b38c *tests/testthat/test_required_ipt_fit.R
 891e35a744b0546db5dc5781dfc80e9c *tests/testthat/test_sampling_weight_validation.R
 daa74572be359fe9f1b3eca96a55c0fc *tests/testthat/test_treatment_indicator_validation.R
